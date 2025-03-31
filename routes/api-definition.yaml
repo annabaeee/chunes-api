@@ -1,0 +1,424 @@
+openapi: "3.0.0"
+info:
+  title: "Chunes API"
+  version: "1.0.0"
+servers:
+  - url: "/api/"
+components:
+  securitySchemes:
+    bearer:            
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Item:
+      type: object
+      required: 
+        - id
+        - name
+        - type
+        - image
+        - url
+        - releaseYear
+        - averageScore
+        - artists
+      properties:
+        id:
+          example: '4czdORdCWP9umpbhFXK2fW'
+          type: string
+        name:
+          example: album name
+          type: string
+        image:
+          example: 'https://some/image.png'
+          type: string
+          format: uri
+        url:
+          example: 'https://spotify/url'
+          type: string
+          format: uri
+        type:
+          type: string
+          enum: ['album', 'track']
+        averageScore:
+          type: number             
+        releaseYear:
+          type: number
+        artists:
+          type: array
+          items: 
+            $ref: '#/components/schemas/Artist'
+    Artist:
+      type: object
+      required: 
+        - id
+        - name
+        - url
+      properties: 
+        id: 
+          type: string
+          example: 5ZsFI1h6hIdQRw2ti0hz81
+        name: 
+          type: string
+          example: ZAYN
+        url: 
+          type: string
+          example: https://open.spotify.com/artist/5ZsFI1h6hIdQRw2ti0hz81
+    Rating:
+      type: object
+      required: 
+        - id
+        - userName
+        - score
+        - createdAt
+      properties: 
+        id:
+          type: integer
+          format: int64
+        userName:
+          type: string
+        profileUrl:
+          type: string
+          format: uri
+        score:
+          type: integer
+          example: 3
+        createdAt:
+          type: string
+          format: date-time
+        review: 
+          type: string
+    ItemRatings:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Item'
+        - properties:
+            myRating:
+              $ref: '#/components/schemas/Rating'
+            ratings:
+              type: array
+              items:
+                $ref: '#/components/schemas/Rating'
+    AlbumDetails:
+      type: object
+      required:
+        - tracks
+      allOf:
+        - $ref: '#/components/schemas/ItemRatings'
+        - properties:
+            tracks:
+              $ref: '#/components/schemas/AlbumTrack'
+    AlbumTrack:
+      type: object
+      required: 
+        - id
+        - name
+        - url
+      properties: 
+        id:
+          type: string
+        name:
+          type: string
+        url:
+          type: string
+          format: uri
+        previewUrl:
+          type: string
+          format: uri
+    TrackDetails:
+      type: object
+      required:
+        - tracks
+      allOf:
+        - $ref: '#/components/schemas/ItemRatings'
+
+paths:
+  /auth/spotify-auth-url:
+    post:
+      tags: 
+        - Authentication
+      summary: Create a Spotify Auth URL
+      operationId: createAuthUrl
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                redirectUri:
+                  type: string        
+                  example: http://localhost:8888/callback
+      responses:
+        '200':
+          description: Response with auth url
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authUrl:
+                    type: string        
+                    example: https://accounts.spotify.com/authorize?param1&param2
+  /auth/login:
+    post:
+      tags: 
+        - Authentication
+      summary: Log in with a spotify auth code
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: 
+                - code
+                - state
+                - redirect_uri
+              properties:
+                code: 
+                  description: code url param returned by Spotify to redirect_uri
+                  type: string
+                state: 
+                  description: state url param returned by Spotify to redirect_uri
+                  type: string
+                redirect_uri:
+                  description: used only for verification by Spotify. Must match what was passed in for /auth/spotify-auth-url exactly.
+                  type: string        
+                  example: http://localhost:8888/callback
+                device_id:
+                  description: optional device ID
+                  type: string
+      responses:
+        '200':
+          description: Response with Chunes access token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    description: Chunes access token
+                    type: string        
+                  user_id:
+                    description: Spotify user id or generated anonymous id
+                    type: string        
+                  profile_url:
+                    description: profile image url
+                    type: string        
+                  is_anon: 
+                    description: true if the user id is a generated anonymous user id
+                    type: boolean
+                  expires_at:
+                    description: token expiration datetime
+                    type: number
+  /albums/new-releases:
+    get:
+      security: 
+        - bearer: []
+      tags: ["Albums"]
+      summary: Get new album releases
+      operationId: getNewReleases
+      responses:
+        '200':
+          description: List of newly released albums
+          content:
+            application/json: 
+              schema: 
+                type: array
+                items: 
+                  $ref: '#/components/schemas/Item'                
+  /albums/recommended:
+    get:
+      security: 
+        - bearer: []
+      tags: ["Albums"]
+      summary: Get recommended albums
+      operationId: getRecommendedAlbums
+      responses:
+        '200':
+          description: List of recommended albums
+          content:
+            application/json: 
+              schema: 
+                type: array
+                items: 
+                  $ref: '#/components/schemas/Item'
+  /albums/{id}:
+    get:
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            example: '4czdORdCWP9umpbhFXK2fW'
+          required: true
+          description: Spotify album id
+      security: 
+        - bearer: []
+      tags: ["Albums"]
+      summary: Get album details with tracks and ratings
+      operationId: getAlbumDetails
+      responses:
+        '200':
+          description: Item detail
+          content:
+            application/json: 
+              schema:
+                $ref: '#/components/schemas/AlbumDetails'
+  /tracks/{id}:
+    get:
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            example: '4VrWlk8IQxevMvERoX08iC'
+          required: true
+          description: Spotify track id
+      security: 
+        - bearer: []
+      tags: ["Tracks"]
+      summary: Get track details with tracks and ratings
+      operationId: getTrackDetails
+      responses:
+        '200':
+          description: Item detail
+          content:
+            application/json: 
+              schema:
+                $ref: '#/components/schemas/TrackDetails'
+  /tracks/top:
+    get:
+      security: 
+        - bearer: []
+      tags: ["Tracks"]
+      summary: Get top tracks of user
+      operationId: getTopTracks
+      responses:
+        '200':
+          description: List of top tracks of user
+          content:
+            application/json: 
+              schema: 
+                type: array
+                items: 
+                  $ref: '#/components/schemas/Item'                
+  /ratings:
+    get:
+      security: 
+        - bearer: []
+      tags: ["Ratings"]
+      summary: Get latest ratings
+      operationId: getLatestRatings
+      responses:
+        '200':
+          description: List of latest ratings
+          content:
+            application/json: 
+              schema: 
+                type: array
+                items: 
+                  $ref: '#/components/schemas/ItemRatings'                
+
+  /ratings/me:
+    get:
+      security: 
+        - bearer: []
+      tags: ["Ratings"]
+      summary: Get own ratings
+      operationId: getMyRatings
+      responses:
+        '200':
+          description: List of own ratings
+          content:
+            application/json: 
+              schema: 
+                type: array
+                items: 
+                  $ref: '#/components/schemas/ItemRatings'                
+
+  /ratings/{type}/{id}:
+    parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          example: '4czdORdCWP9umpbhFXK2fW'
+        required: true
+        description: Spotify album or track id
+      - in: path
+        name: type
+        schema:
+          type: string
+          enum: ['albums', 'tracks']
+          example: 'album'
+        required: true
+        description: track or album
+    post:
+      security: 
+        - bearer: []
+      tags: ["Ratings"]
+      summary: Rate an album or track
+      operationId: rateItem
+      requestBody: 
+        content: 
+          application/json:
+            schema:
+              required: 
+                - score
+              type: object
+              properties: 
+                score:
+                  type: integer
+                  example: 3
+                review: 
+                  type: string
+      responses:
+        '200':
+          description: Rating
+          content:
+            application/json: 
+              schema:
+                $ref: '#/components/schemas/Rating'
+    delete:
+      security: 
+        - bearer: []
+      tags: ["Ratings"]
+      summary: Delete a rating
+      operationId: deleteRating
+      responses:
+        '204':
+          description: No content
+  /search:
+    get:
+      parameters:
+        - in: query
+          name: query
+          schema:
+            type: string
+            example: 'Sia'
+          required: true
+          description: Search query
+      security: 
+        - bearer: []
+      tags: ["Search"]
+      summary: Get album and track search results
+      operationId: search
+      responses:
+        '200':
+          description: Album and track items
+          content:
+            application/json: 
+              schema:
+                type: object
+                properties:
+                  albums:
+                    description: Albums search result
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Item'        
+                  tracks:
+                    description: Albums search result
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Item'        
